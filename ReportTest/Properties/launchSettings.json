@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ReportTest": {
+      "commandName": "Project",
+      "commandLineArgs": "D:\\testfile.csv --points 200"
+    }
+  }
+}
