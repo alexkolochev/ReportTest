@@ -6,57 +6,56 @@ using System.Collections.Concurrent;
 
 if (args.Length == 0)
 {
-    Console.WriteLine("Usage: dotnet run <csv files...> [--points N] [--output-timeseries path.csv]");
+    Console.WriteLine("Usage: dotnet run <csv files...> [--points N] [--output-directory dir] " +
+                      "[--date-from \"dd-MM-yyyy HH:mm:ss\"] [--date-to \"dd-MM-yyyy HH:mm:ss\"] " +
+                      "[--date-from-table \"dd-MM-yyyy HH:mm:ss\"] [--date-to-table \"dd-MM-yyyy HH:mm:ss\"]");
     return;
 }
 
-var (Files, Points, TimeSeriesOutput) = Parser.ParseArgs(args);
+var (Files, Points, OutputDirectory, DateFrom, DateTo, DateFromTable, DateToTable) = Parser.ParseArgs(args);
 var filePaths = Parser.GetFilePaths(Files);
 
-var stats = new ConcurrentDictionary<string, StreamingStats>();
+var statsWithUrl = new ConcurrentDictionary<string, StreamingStats>();
+var statsNoUrl = new ConcurrentDictionary<string, StreamingStats>();
 var tsAggregator = new TimeSeriesAggregator();
 var rcAggregator = new ResponseCodeTimeSeriesAggregator();
 var rcSummary = new ResponseCodeSummary();
 Console.WriteLine($"Processing {filePaths.Count} files...");
-var (withUrlCount, noUrlCount) = await Parser.ProcessFilesAsync(filePaths, stats, tsAggregator, rcAggregator, rcSummary);
+var (minTimeMs, maxTimeMs) = await Parser.ComputeTimeRangeAsync(filePaths);
+var (dateFromMs, dateToMs, dateFromTableMs, dateToTableMs) =
+    Parser.NormalizeDateRanges(DateFrom, DateTo, DateFromTable, DateToTable, minTimeMs, maxTimeMs);
 
-Console.WriteLine("\n=== Summary by Label+URL ===");
-Parser.PrintResults(stats);
-
-Console.WriteLine("\n=== Response Codes Summary ===");
-rcSummary.PrintSummary(withUrlCount);
-Console.WriteLine($"Requests with URL: {withUrlCount:N0}, without URL: {noUrlCount:N0}");
-
-string tsPath = TimeSeriesOutput ?? "timeseries_label.csv";
+var (withUrlCount, _) = await Parser.ProcessFilesAsync(
+    filePaths,
+    statsWithUrl,
+    statsNoUrl,
+    tsAggregator,
+    rcAggregator,
+    rcSummary,
+    dateFromMs,
+    dateToMs,
+    dateFromTableMs,
+    dateToTableMs);
+var rcRows = rcAggregator.ExportToCSV(Points);
 var tsSplit = tsAggregator.ExportToSeparatedCSV(Points);
 
-string tsBaseName = Path.GetFileNameWithoutExtension(tsPath);
-string? tsDir = Path.GetDirectoryName(tsPath);
-string basePath = string.IsNullOrWhiteSpace(tsDir) ? tsBaseName : Path.Combine(tsDir, tsBaseName);
+string tsDir = OutputDirectory ?? "default";
+if (!Directory.Exists(tsDir)) Directory.CreateDirectory(tsDir);
 
-string bucketSecPath = $"{basePath}.bucketsec.csv";
-string withUrlAvgPath = $"{basePath}.withUrl_avgElapsed.csv";
-string withUrlRpsPath = $"{basePath}.withUrl_rps.csv";
-string noUrlAvgPath = $"{basePath}.noUrl_avgElapsed.csv";
-string noUrlRpsPath = $"{basePath}.noUrl_rps.csv";
+string withUrlAvgPath = $@"{tsDir}\withUrl_avgElapsed.csv";
+string withUrlRpsPath = $@"{tsDir}\withUrl_rps.csv";
+string noUrlAvgPath = $@"{tsDir}\noUrl_avgElapsed.csv";
+string noUrlRpsPath = $@"{tsDir}\noUrl_rps.csv";
+string rcPath = $@"{tsDir}\responseCodes_rps.csv";
+string statsWithUrlPath = $@"{tsDir}\stats_withUrl.csv";
+string statsNoUrlPath = $@"{tsDir}\stats_noUrl.csv";
+string summaryPath = $@"{tsDir}\responseCodes_summary.csv";
 
-CsvWriter.WriteRows(bucketSecPath, tsSplit.BucketSec);
 CsvWriter.WriteRows(withUrlAvgPath, tsSplit.WithUrlAvgElapsed);
 CsvWriter.WriteRows(withUrlRpsPath, tsSplit.WithUrlRps);
 CsvWriter.WriteRows(noUrlAvgPath, tsSplit.NoUrlAvgElapsed);
 CsvWriter.WriteRows(noUrlRpsPath, tsSplit.NoUrlRps);
-
-string rcPath = Path.ChangeExtension(tsPath, ".responseCode.csv");
-var rcRows = rcAggregator.ExportToCSV(Points);
 CsvWriter.WriteRows(rcPath, rcRows);
-
-string summaryPath = "responseCodes_summary.csv";
 File.WriteAllText(summaryPath, rcSummary.ToCsv(withUrlCount));
-
-Console.WriteLine($"\n✓ Time-series BucketSec: {bucketSecPath}");
-Console.WriteLine($"✓ Time-series withUrl AvgElapsed: {withUrlAvgPath}");
-Console.WriteLine($"✓ Time-series withUrl RPS: {withUrlRpsPath}");
-Console.WriteLine($"✓ Time-series noUrl AvgElapsed: {noUrlAvgPath}");
-Console.WriteLine($"✓ Time-series noUrl RPS: {noUrlRpsPath}");
-Console.WriteLine($"✓ ResponseCode RPS time-series: {rcPath}");
-Console.WriteLine($"✓ Response codes summary: {summaryPath}");
+CsvWriter.WriteRows(statsWithUrlPath, Parser.BuildStatsCsvRows(statsWithUrl));
+CsvWriter.WriteRows(statsNoUrlPath, Parser.BuildStatsCsvRows(statsNoUrl));

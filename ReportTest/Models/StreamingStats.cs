@@ -43,10 +43,14 @@ public class StreamingStats
     public double CV => Mean > 0 ? StdDev / Mean * 100 : 0;
     public double RPS => DurationSeconds > 0 ? Count / DurationSeconds : 0;
     public double DurationSeconds => (MaxTimeStamp - MinTimeStamp) / 1000.0;
+    public double Median => Percentile(50);
     public double P90 => Percentile(90);
     public double P95 => Percentile(95);
+    public double P99 => Percentile(99);
+    public double P995 => Percentile(99.5);
+    public double P9995 => Percentile(99.95);
 
-    private double Percentile(int perc)
+    private double Percentile(double perc)
     {
         if (_samples.Count == 0) return 0;
         if (!_samplesSorted)

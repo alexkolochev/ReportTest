@@ -122,7 +122,7 @@ public class TimeSeriesAggregator
         var allTimes = BucketHelper.BuildAllTimes(aggregated.Values);
         foreach (var time in allTimes)
         {
-            string timeStr = DateTimeOffset.FromUnixTimeMilliseconds(time).ToString("yyyy-MM-dd HH:mm:ss.fff");
+            string timeStr = time.ToString();
             bucketSecRows.Add([timeStr, bucketSeconds.ToString("F1")]);
             withUrlAvgRows.Add(BuildAvgRow(timeStr, time, withUrlLabels, aggregated, "withUrl"));
             withUrlRpsRows.Add(BuildRpsRow(timeStr, time, withUrlLabels, aggregated, bucketSeconds, "withUrl"));
@@ -168,8 +168,8 @@ public class TimeSeriesAggregator
         var header = new List<string> { "Time" };
         foreach (var label in labels)
         {
-            header.Add($"{label}_RPS_Success");
-            header.Add($"{label}_RPS_Error");
+            header.Add($"{label} Success");
+            header.Add($"{label} Failed");
         }
         return header;
     }

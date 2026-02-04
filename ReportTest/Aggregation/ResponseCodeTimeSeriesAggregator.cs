@@ -14,7 +14,7 @@ public class ResponseCodeTimeSeriesAggregator
         _globalMinTime = Math.Min(_globalMinTime, timeStamp);
         _globalMaxTime = Math.Max(_globalMaxTime, timeStamp);
 
-        string key = $"rc_{responseCode}";
+        string key = $"{responseCode}";
         var buckets = _rawBuckets.GetOrAdd(key, _ => new ConcurrentDictionary<long, long>());
 
         long bucketSec = timeStamp / 1000;
@@ -62,9 +62,9 @@ public class ResponseCodeTimeSeriesAggregator
 
         var labels = new List<string>(aggregated.Keys);
         labels.Sort(StringComparer.Ordinal);
-        var header = new List<string> { "Time", "BucketSec" };
+        var header = new List<string> { "Time" };
         foreach (var label in labels)
-            header.Add($"{label}_RPS");
+            header.Add($"{label}");
 
         rows.Add(header);
 
@@ -74,8 +74,7 @@ public class ResponseCodeTimeSeriesAggregator
         {
             var row = new List<string>
             {
-                DateTimeOffset.FromUnixTimeMilliseconds(time).ToString("yyyy-MM-dd HH:mm:ss.fff"),
-                bucketSeconds.ToString("F1", CultureInfo.InvariantCulture)
+                time.ToString(CultureInfo.InvariantCulture)
             };
 
             foreach (var label in labels)
