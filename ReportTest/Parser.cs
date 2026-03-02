@@ -164,7 +164,7 @@ public static class Parser
         long latency = indices.latency.HasValue ? row[indices.latency.Value].Parse<long>() : 0;
         long timeStamp = indices.timeStamp.HasValue ? row[indices.timeStamp.Value].Parse<long>() : 0;
         string label = indices.label.HasValue ? row[indices.label.Value].ToString() ?? "unknown" : "unknown";
-        bool success = indices.success.HasValue ? row[indices.success.Value].Parse<bool>() : true;
+        bool success = !indices.success.HasValue || row[indices.success.Value].Parse<bool>();
         string? urlStr = indices.url.HasValue ? row[indices.url.Value].ToString() : null;
         bool hasUrl = indices.url.HasValue &&
                       !string.IsNullOrWhiteSpace(urlStr) &&
@@ -363,7 +363,7 @@ public static class Parser
 
         foreach (var kv in labelToUrl.OrderBy(x => x.Key))
         {
-            rows.Add(new List<string> { kv.Key, kv.Value });
+            rows.Add([kv.Key, kv.Value]);
         }
 
         return rows;

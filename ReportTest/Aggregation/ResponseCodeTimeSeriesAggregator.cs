@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 
 namespace ReportTest.Aggregation;
 
@@ -25,10 +24,10 @@ public class ResponseCodeTimeSeriesAggregator
     {
         if (_globalMaxTime <= _globalMinTime || _rawBuckets.IsEmpty)
         {
-            return new List<List<string>>
-            {
-                new() { "Time", "BucketSec" }
-            };
+            return
+            [
+                ["Time", "BucketSec"]
+            ];
         }
 
         int points = targetPoints ?? 100;

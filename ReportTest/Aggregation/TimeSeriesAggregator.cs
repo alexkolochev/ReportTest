@@ -54,10 +54,8 @@ public class TimeSeriesAggregator
         int points = targetPoints ?? 100;
         long bucketSizeMs = BucketHelper.CalculateBucketSizeMs(_globalMinTime, _globalMaxTime, points);
 
-        // Создаём все бакеты (включая пустые)
         var allBuckets = BucketHelper.BuildAllBuckets(_globalMinTime, _globalMaxTime, bucketSizeMs);
 
-        // Агрегируем в финальные бакеты
         var aggregated = new Dictionary<string, SortedDictionary<long, BucketData>>();
         foreach (var kvSeries in _rawBuckets)
         {
@@ -79,7 +77,6 @@ public class TimeSeriesAggregator
                 bucket.ElapsedSum += kvBucket.Value.ElapsedSum;
             }
 
-            // Заполняем пропуски нулями
             foreach (long t in allBuckets)
             {
                 if (!finalBuckets.ContainsKey(t))
