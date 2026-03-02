@@ -25,13 +25,13 @@ public class ResponseCodeSummary
 
     public string ToCsv(long totalRequests)
     {
-        var lines = new List<string> { "ResponseCode,Count,Percent" };
+        var lines = new List<string> { "ResponseCode;Count;Percent" };
         long total = totalRequests;
 
         foreach (var kv in _counts.OrderBy(kv => kv.Key))
         {
             double percent = total > 0 ? kv.Value * 100.0 / total : 0;
-            lines.Add($"{kv.Key},{kv.Value},{percent:F2}");
+            lines.Add($"{kv.Key};{kv.Value};{percent:F2}");
         }
         return string.Join("\n", lines);
     }

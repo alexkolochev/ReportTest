@@ -12,50 +12,74 @@ if (args.Length == 0)
     return;
 }
 
-var (Files, Points, OutputDirectory, DateFrom, DateTo, DateFromTable, DateToTable) = Parser.ParseArgs(args);
-var filePaths = Parser.GetFilePaths(Files);
+try
+{
+    var (Files, Points, OutputDirectory, DateFrom, DateTo, DateFromTable, DateToTable) = Parser.ParseArgs(args);
+    var filePaths = Parser.GetFilePaths(Files);
 
-var statsWithUrl = new ConcurrentDictionary<string, StreamingStats>();
-var statsNoUrl = new ConcurrentDictionary<string, StreamingStats>();
-var tsAggregator = new TimeSeriesAggregator();
-var rcAggregator = new ResponseCodeTimeSeriesAggregator();
-var rcSummary = new ResponseCodeSummary();
-Console.WriteLine($"Processing {filePaths.Count} files...");
-var (minTimeMs, maxTimeMs) = await Parser.ComputeTimeRangeAsync(filePaths);
-var (dateFromMs, dateToMs, dateFromTableMs, dateToTableMs) =
-    Parser.NormalizeDateRanges(DateFrom, DateTo, DateFromTable, DateToTable, minTimeMs, maxTimeMs);
+    var statsWithUrl = new ConcurrentDictionary<string, StreamingStats>();
+    var statsNoUrl = new ConcurrentDictionary<string, StreamingStats>();
+    var labelToUrl = new ConcurrentDictionary<string, string>();
+    var tsAggregator = new TimeSeriesAggregator();
+    var rcAggregator = new ResponseCodeTimeSeriesAggregator();
+    var rcSummary = new ResponseCodeSummary();
+    Console.WriteLine($"Processing {filePaths.Count} files...");
+    var (minTimeMs, maxTimeMs) = await Parser.ComputeTimeRangeAsync(filePaths);
+    var (dateFromMs, dateToMs, dateFromTableMs, dateToTableMs) =
+        Parser.NormalizeDateRanges(DateFrom, DateTo, DateFromTable, DateToTable, minTimeMs, maxTimeMs);
 
-var (withUrlCount, _) = await Parser.ProcessFilesAsync(
-    filePaths,
-    statsWithUrl,
-    statsNoUrl,
-    tsAggregator,
-    rcAggregator,
-    rcSummary,
-    dateFromMs,
-    dateToMs,
-    dateFromTableMs,
-    dateToTableMs);
-var rcRows = rcAggregator.ExportToCSV(Points);
-var tsSplit = tsAggregator.ExportToSeparatedCSV(Points);
+    var (withUrlCount, _) = await Parser.ProcessFilesAsync(
+        filePaths,
+        statsWithUrl,
+        statsNoUrl,
+        labelToUrl,
+        tsAggregator,
+        rcAggregator,
+        rcSummary,
+        dateFromMs,
+        dateToMs,
+        dateFromTableMs,
+        dateToTableMs);
+    var rcRows = rcAggregator.ExportToCSV(Points);
+    var tsSplit = tsAggregator.ExportToSeparatedCSV(Points);
 
-string tsDir = OutputDirectory ?? "default";
-if (!Directory.Exists(tsDir)) Directory.CreateDirectory(tsDir);
+    string tsDir = $@"{AppDomain.CurrentDomain.BaseDirectory}\results\{OutputDirectory ?? "default"}";
+    if (!Directory.Exists(tsDir)) Directory.CreateDirectory(tsDir);
 
-string withUrlAvgPath = $@"{tsDir}\withUrl_avgElapsed.csv";
-string withUrlRpsPath = $@"{tsDir}\withUrl_rps.csv";
-string noUrlAvgPath = $@"{tsDir}\noUrl_avgElapsed.csv";
-string noUrlRpsPath = $@"{tsDir}\noUrl_rps.csv";
-string rcPath = $@"{tsDir}\responseCodes_rps.csv";
-string statsWithUrlPath = $@"{tsDir}\stats_withUrl.csv";
-string statsNoUrlPath = $@"{tsDir}\stats_noUrl.csv";
-string summaryPath = $@"{tsDir}\responseCodes_summary.csv";
+    string withUrlAvgPath = $@"{tsDir}\withUrl_avgElapsed.csv";
+    string withUrlRpsPath = $@"{tsDir}\withUrl_rps.csv";
+    string noUrlAvgPath = $@"{tsDir}\noUrl_avgElapsed.csv";
+    string noUrlRpsPath = $@"{tsDir}\noUrl_rps.csv";
+    string rcPath = $@"{tsDir}\responseCodes_rps.csv";
+    string statsWithUrlPath = $@"{tsDir}\stats_withUrl.csv";
+    string statsNoUrlPath = $@"{tsDir}\stats_noUrl.csv";
+    string labelUrlPath = $@"{tsDir}\label_url.csv";
+    string dateRangesPath = $@"{tsDir}\date_ranges.csv";
+    string summaryPath = $@"{tsDir}\responseCodes_summary.csv";
 
-CsvWriter.WriteRows(withUrlAvgPath, tsSplit.WithUrlAvgElapsed);
-CsvWriter.WriteRows(withUrlRpsPath, tsSplit.WithUrlRps);
-CsvWriter.WriteRows(noUrlAvgPath, tsSplit.NoUrlAvgElapsed);
-CsvWriter.WriteRows(noUrlRpsPath, tsSplit.NoUrlRps);
-CsvWriter.WriteRows(rcPath, rcRows);
-File.WriteAllText(summaryPath, rcSummary.ToCsv(withUrlCount));
-CsvWriter.WriteRows(statsWithUrlPath, Parser.BuildStatsCsvRows(statsWithUrl));
-CsvWriter.WriteRows(statsNoUrlPath, Parser.BuildStatsCsvRows(statsNoUrl));
+    CsvWriter.WriteRows(withUrlAvgPath, tsSplit.WithUrlAvgElapsed);
+    CsvWriter.WriteRows(withUrlRpsPath, tsSplit.WithUrlRps);
+    CsvWriter.WriteRows(noUrlAvgPath, tsSplit.NoUrlAvgElapsed);
+    CsvWriter.WriteRows(noUrlRpsPath, tsSplit.NoUrlRps);
+    CsvWriter.WriteRows(rcPath, rcRows);
+    File.WriteAllText(summaryPath, rcSummary.ToCsv(withUrlCount));
+    CsvWriter.WriteRows(statsWithUrlPath, Parser.BuildStatsCsvRows(statsWithUrl));
+    CsvWriter.WriteRows(statsNoUrlPath, Parser.BuildStatsCsvRows(statsNoUrl));
+    CsvWriter.WriteRows(labelUrlPath, Parser.BuildLabelUrlCsvRows(labelToUrl));
+    CsvWriter.WriteRows(dateRangesPath, new List<List<string>>
+    {
+        new() { "DateFromMs", "DateToMs", "DateFromTableMs", "DateToTableMs" },
+        new()
+        {
+            dateFromMs.ToString(),
+            dateToMs.ToString(),
+            dateFromTableMs.ToString(),
+            dateToTableMs.ToString()
+        }
+    });
+}
+catch (Exception ex)
+{
+    Logger.ErrorLog(ex);
+}
+

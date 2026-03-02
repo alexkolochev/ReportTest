@@ -29,8 +29,11 @@ public class TimeSeriesAggregator
         long bucketSec = timeStamp / 1000;
         var bucket = buckets.GetOrAdd(bucketSec, _ => new BucketData());
         bucket.TotalRequests++;
-        bucket.ElapsedSum += elapsed;
-        if (success) bucket.SuccessRequests++;
+        if (success)
+        {
+            bucket.SuccessRequests++;
+            bucket.ElapsedSum += elapsed;
+        }
         else bucket.ErrorRequests++;
     }
 
@@ -104,7 +107,7 @@ public class TimeSeriesAggregator
         };
         var withUrlAvgHeader = new List<string>(1 + withUrlLabels.Count) { "Time" };
         foreach (var label in withUrlLabels)
-            withUrlAvgHeader.Add($"{label}_AvgElapsed");
+            withUrlAvgHeader.Add($"{label}");
         var withUrlAvgRows = new List<List<string>> { withUrlAvgHeader };
         var withUrlRpsRows = new List<List<string>>
         {
@@ -112,7 +115,7 @@ public class TimeSeriesAggregator
         };
         var noUrlAvgHeader = new List<string>(1 + noUrlLabels.Count) { "Time" };
         foreach (var label in noUrlLabels)
-            noUrlAvgHeader.Add($"{label}_AvgElapsed");
+            noUrlAvgHeader.Add($"{label}");
         var noUrlAvgRows = new List<List<string>> { noUrlAvgHeader };
         var noUrlRpsRows = new List<List<string>>
         {
@@ -185,7 +188,7 @@ public class TimeSeriesAggregator
         foreach (var label in labels)
         {
             var bucket = GetBucket(aggregated, $"{label}_{urlKey}", time);
-            double avgElapsed = bucket.TotalRequests > 0 ? bucket.ElapsedSum / bucket.TotalRequests : 0;
+            double avgElapsed = bucket.SuccessRequests > 0 ? bucket.ElapsedSum / bucket.SuccessRequests : 0;
             row.Add(avgElapsed.ToString("F0"));
         }
         return row;

@@ -65,10 +65,11 @@ public static class Parser
     public static async Task<(long WithUrl, long NoUrl)> ProcessFilesAsync(List<string> filePaths,
         ConcurrentDictionary<string, StreamingStats> statsWithUrl,
         ConcurrentDictionary<string, StreamingStats> statsNoUrl,
+        ConcurrentDictionary<string, string> labelToUrl,
         TimeSeriesAggregator tsAggregator, ResponseCodeTimeSeriesAggregator rcAggregator, ResponseCodeSummary rcSummary,
         long dateFromMs, long dateToMs, long dateFromTableMs, long dateToTableMs)
     {
-        var tasks = filePaths.Select(file => ProcessSingleFileAsync(file, statsWithUrl, statsNoUrl, tsAggregator, rcAggregator, rcSummary,
+        var tasks = filePaths.Select(file => ProcessSingleFileAsync(file, statsWithUrl, statsNoUrl, labelToUrl, tsAggregator, rcAggregator, rcSummary,
             dateFromMs, dateToMs, dateFromTableMs, dateToTableMs));
         var counts = await Task.WhenAll(tasks);
         long withUrl = 0;
@@ -84,24 +85,28 @@ public static class Parser
     public static async Task<(long WithUrl, long NoUrl)> ProcessSingleFileAsync(string filePath,
         ConcurrentDictionary<string, StreamingStats> statsWithUrl,
         ConcurrentDictionary<string, StreamingStats> statsNoUrl,
+        ConcurrentDictionary<string, string> labelToUrl,
         TimeSeriesAggregator tsAggregator, ResponseCodeTimeSeriesAggregator rcAggregator, ResponseCodeSummary rcSummary,
         long dateFromMs, long dateToMs, long dateFromTableMs, long dateToTableMs)
     {
         long withUrl = 0;
         long noUrl = 0;
-        await using var stream = File.OpenRead(filePath);
+        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = Sep.Reader(o => o with
         {
             HasHeader = true,
             Trim = SepTrim.All,
-            InitialBufferLength = 1024 * 128
+            InitialBufferLength = 1024 * 128,
+            DisableColCountCheck = true
         }).From(stream);
 
         var header = reader.Header;
         var indices = GetIndicesSafe(header);
+        int headerColCount = header.ColNames.Count;
 
         foreach (var row in reader)
         {
+            if (row.ColCount != headerColCount) continue;
             string? urlStr = indices.url.HasValue ? row[indices.url.Value].ToString() : null;
             bool hasUrl = indices.url.HasValue &&
                           !string.IsNullOrWhiteSpace(urlStr) &&
@@ -114,7 +119,7 @@ public static class Parser
                 else noUrl++;
             }
 
-            UpdateStats(row, indices, statsWithUrl, statsNoUrl, tsAggregator, rcAggregator, rcSummary,
+            UpdateStats(row, indices, statsWithUrl, statsNoUrl, labelToUrl, tsAggregator, rcAggregator, rcSummary,
                 dateFromMs, dateToMs, dateFromTableMs, dateToTableMs);
         }
 
@@ -148,6 +153,7 @@ public static class Parser
     public static void UpdateStats(SepReader.Row row, (int? label, int? elapsed, int? success, int? url, int? timeStamp, int? responseCode, int? idleTime, int? latency) indices,
         ConcurrentDictionary<string, StreamingStats> statsWithUrl,
         ConcurrentDictionary<string, StreamingStats> statsNoUrl,
+        ConcurrentDictionary<string, string> labelToUrl,
         TimeSeriesAggregator tsAggregator, ResponseCodeTimeSeriesAggregator rcAggregator, ResponseCodeSummary rcSummary,
         long dateFromMs, long dateToMs, long dateFromTableMs, long dateToTableMs)
     {
@@ -169,6 +175,9 @@ public static class Parser
 
         if (inTableRange)
         {
+            if (hasUrl && urlStr is not null)
+                labelToUrl.TryAdd(label, urlStr);
+
             var target = hasUrl ? statsWithUrl : statsNoUrl;
             var group = target.GetOrAdd(label, _ => new StreamingStats());
             lock (group) group.Update(elapsed, success, timeStamp, idleTime, latency);
@@ -215,20 +224,23 @@ public static class Parser
         long min = long.MaxValue;
         long max = long.MinValue;
 
-        await using var stream = File.OpenRead(filePath);
+        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = Sep.Reader(o => o with
         {
             HasHeader = true,
             Trim = SepTrim.All,
-            InitialBufferLength = 1024 * 128
+            InitialBufferLength = 1024 * 128,
+            DisableColCountCheck = true
         }).From(stream);
 
         var header = reader.Header;
         var indices = GetIndicesSafe(header);
+        int headerColCount = header.ColNames.Count;
         if (!indices.timeStamp.HasValue) return (min, max);
 
         foreach (var row in reader)
         {
+            if (row.ColCount != headerColCount) continue;
             long timeStamp = row[indices.timeStamp.Value].Parse<long>();
             min = Math.Min(min, timeStamp);
             max = Math.Max(max, timeStamp);
@@ -314,29 +326,44 @@ public static class Parser
             rows.Add(new List<string>
             {
                 kv.Key,
-                s.Count.ToString("N0", CultureInfo.InvariantCulture),
-                s.SuccessRate.ToString("F1", CultureInfo.InvariantCulture),
-                s.ErrorRate.ToString("F1", CultureInfo.InvariantCulture),
-                s.SuccessCount.ToString("N0", CultureInfo.InvariantCulture),
-                s.ErrorCount.ToString("N0", CultureInfo.InvariantCulture),
-                s.MinElapsed.ToString("F0", CultureInfo.InvariantCulture),
-                s.MaxElapsed.ToString("F0", CultureInfo.InvariantCulture),
-                s.MinTimeStamp.ToString("N0", CultureInfo.InvariantCulture),
-                s.MaxTimeStamp.ToString("N0", CultureInfo.InvariantCulture),
-                s.RPS.ToString("F2", CultureInfo.InvariantCulture),
-                s.Mean.ToString("F0", CultureInfo.InvariantCulture),
-                s.Median.ToString("F0", CultureInfo.InvariantCulture),
-                s.P90.ToString("F0", CultureInfo.InvariantCulture),
-                s.P95.ToString("F0", CultureInfo.InvariantCulture),
-                s.P99.ToString("F0", CultureInfo.InvariantCulture),
-                s.P995.ToString("F0", CultureInfo.InvariantCulture),
-                s.P9995.ToString("F0", CultureInfo.InvariantCulture),
-                s.IdleTimeAvg.ToString("F0", CultureInfo.InvariantCulture),
-                s.LatencyAvg.ToString("F0", CultureInfo.InvariantCulture),
-                s.StdDev.ToString("F0", CultureInfo.InvariantCulture),
-                s.CV.ToString("F0", CultureInfo.InvariantCulture),
-                s.DurationSeconds.ToString("F0", CultureInfo.InvariantCulture)
+                s.Count.ToString(),
+                s.SuccessRate.ToString(),
+                s.ErrorRate.ToString(),
+                s.SuccessCount.ToString(),
+                s.ErrorCount.ToString(),
+                s.MinElapsedValue.ToString(),
+                s.MaxElapsedValue.ToString(),
+                s.MinTimeStampValue.ToString(),
+                s.MaxTimeStampValue.ToString(),
+                s.RPS.ToString(),
+                s.Mean.ToString(),
+                s.Median.ToString(),
+                s.P90.ToString(),
+                s.P95.ToString(),
+                s.P99.ToString(),
+                s.P995.ToString(),
+                s.P9995.ToString(),
+                s.IdleTimeAvg.ToString(),
+                s.LatencyAvg.ToString(),
+                s.StdDev.ToString(),
+                s.CV.ToString(),
+                s.DurationSeconds.ToString()
             });
+        }
+
+        return rows;
+    }
+
+    public static List<List<string>> BuildLabelUrlCsvRows(ConcurrentDictionary<string, string> labelToUrl)
+    {
+        var rows = new List<List<string>>
+        {
+            new() { "Label", "URL" }
+        };
+
+        foreach (var kv in labelToUrl.OrderBy(x => x.Key))
+        {
+            rows.Add(new List<string> { kv.Key, kv.Value });
         }
 
         return rows;

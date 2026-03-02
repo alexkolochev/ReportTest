@@ -74,14 +74,14 @@ public class ResponseCodeTimeSeriesAggregator
         {
             var row = new List<string>
             {
-                time.ToString(CultureInfo.InvariantCulture)
+                time.ToString()
             };
 
             foreach (var label in labels)
             {
                 long count = aggregated[label].TryGetValue(time, out var c) ? c : 0;
                 double rps = bucketSeconds > 0 ? count / bucketSeconds : 0;
-                row.Add(rps.ToString("F2", CultureInfo.InvariantCulture));
+                row.Add(rps.ToString());
             }
 
             rows.Add(row);

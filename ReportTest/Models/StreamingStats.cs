@@ -19,30 +19,45 @@ public class StreamingStats
 
     public void Update(long elapsed, bool success, long timeStamp, long idleTime, long latency)
     {
-        Count++; SuccessCount += success ? 1 : 0; ErrorCount += success ? 0 : 1;
-        Sum += elapsed; MinElapsed = Math.Min(MinElapsed, elapsed); MaxElapsed = Math.Max(MaxElapsed, elapsed);
-        SumIdleTime += idleTime;
-        SumLatency += latency;
-        MinTimeStamp = Math.Min(MinTimeStamp, timeStamp); MaxTimeStamp = Math.Max(MaxTimeStamp, timeStamp);
-
-        double delta = elapsed - (Sum / Count);
-        M2 += delta * delta;
-        if (_samples.Count < 1000000)
+        Count++;
+        if (success)
         {
-            _samples.Add(elapsed);
-            _samplesSorted = false;
+            SuccessCount++;
+            Sum += elapsed;
+            MinElapsed = Math.Min(MinElapsed, elapsed);
+            MaxElapsed = Math.Max(MaxElapsed, elapsed);
+            SumIdleTime += idleTime;
+            SumLatency += latency;
+            MinTimeStamp = Math.Min(MinTimeStamp, timeStamp);
+            MaxTimeStamp = Math.Max(MaxTimeStamp, timeStamp);
+
+            double delta = elapsed - (Sum / SuccessCount);
+            M2 += delta * delta;
+            if (_samples.Count < 1000000)
+            {
+                _samples.Add(elapsed);
+                _samplesSorted = false;
+            }
+        }
+        else
+        {
+            ErrorCount++;
         }
     }
 
     public double SuccessRate => Count > 0 ? SuccessCount * 100.0 / Count : 0;
     public double ErrorRate => 100 - SuccessRate;
-    public double Mean => Count > 0 ? Sum / Count : 0;
-    public double IdleTimeAvg => Count > 0 ? SumIdleTime / Count : 0;
-    public double LatencyAvg => Count > 0 ? SumLatency / Count : 0;
-    public double StdDev => Count > 1 ? Math.Sqrt(M2 / (Count - 1)) : 0;
+    public double Mean => SuccessCount > 0 ? Sum / SuccessCount : 0;
+    public double IdleTimeAvg => SuccessCount > 0 ? SumIdleTime / SuccessCount : 0;
+    public double LatencyAvg => SuccessCount > 0 ? SumLatency / SuccessCount : 0;
+    public double StdDev => SuccessCount > 1 ? Math.Sqrt(M2 / (SuccessCount - 1)) : 0;
     public double CV => Mean > 0 ? StdDev / Mean * 100 : 0;
-    public double RPS => DurationSeconds > 0 ? Count / DurationSeconds : 0;
-    public double DurationSeconds => (MaxTimeStamp - MinTimeStamp) / 1000.0;
+    public double RPS => DurationSeconds > 0 ? SuccessCount / DurationSeconds : 0;
+    public double DurationSeconds => SuccessCount > 0 ? (MaxTimeStamp - MinTimeStamp) / 1000.0 : 0;
+    public double MinElapsedValue => SuccessCount > 0 ? MinElapsed : 0;
+    public double MaxElapsedValue => SuccessCount > 0 ? MaxElapsed : 0;
+    public long MinTimeStampValue => SuccessCount > 0 ? MinTimeStamp : 0;
+    public long MaxTimeStampValue => SuccessCount > 0 ? MaxTimeStamp : 0;
     public double Median => Percentile(50);
     public double P90 => Percentile(90);
     public double P95 => Percentile(95);
