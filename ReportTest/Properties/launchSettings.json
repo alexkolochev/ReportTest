@@ -2,7 +2,7 @@
   "profiles": {
     "ReportTest": {
       "commandName": "Project",
-      "commandLineArgs": "D:\\PA_rps_0000frsloadst11_20260227-1730_.csv --points 200"
+      "commandLineArgs": "\"C:\\LoadTest\\Result\\ELMA\\2007\\t1.csv\" \"C:\\LoadTest\\Result\\ELMA\\2007\\t2.csv\" \"C:\\LoadTest\\Result\\ELMA\\2007\\t3.csv\" \"C:\\LoadTest\\Result\\ELMA\\2007\\t4.csv\" --output-directory \"1890b4ce-a62c-43c7-8c0b-f9311911ee7f\" --points 50"
     }
   }
 }

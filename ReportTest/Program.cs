@@ -6,7 +6,7 @@ using System.Collections.Concurrent;
 
 if (args.Length == 0)
 {
-    Console.WriteLine("Usage: dotnet run <csv files...> [--points N] [--output-directory dir] " +
+    Console.WriteLine("Usage: dotnet run <csv files...> [--files file1 file2 ...] [--points N] [--output-directory dir] " +
                       "[--date-from \"dd-MM-yyyy HH:mm:ss\"] [--date-to \"dd-MM-yyyy HH:mm:ss\"] " +
                       "[--date-from-table \"dd-MM-yyyy HH:mm:ss\"] [--date-to-table \"dd-MM-yyyy HH:mm:ss\"]");
     return;

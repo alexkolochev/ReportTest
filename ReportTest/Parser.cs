@@ -23,6 +23,11 @@ public static class Parser
         {
             switch (args[i])
             {
+                case "--files" when i + 1 < args.Length:
+                    while (++i < args.Length && !args[i].StartsWith("--"))
+                        files.Add(args[i]);
+                    i--;
+                    break;
                 case "--points" when i + 1 < args.Length:
                     points = int.Parse(args[++i]);
                     break;
@@ -323,8 +328,8 @@ public static class Parser
         foreach (var kv in stats.OrderBy(x => x.Key))
         {
             var s = kv.Value;
-            rows.Add(new List<string>
-            {
+            rows.Add(
+            [
                 kv.Key,
                 s.Count.ToString(),
                 s.SuccessRate.ToString(),
@@ -348,7 +353,7 @@ public static class Parser
                 s.StdDev.ToString(),
                 s.CV.ToString(),
                 s.DurationSeconds.ToString()
-            });
+            ]);
         }
 
         return rows;

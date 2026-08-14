@@ -20,6 +20,8 @@ public class StreamingStats
     public void Update(long elapsed, bool success, long timeStamp, long idleTime, long latency)
     {
         Count++;
+        MinTimeStamp = Math.Min(MinTimeStamp, timeStamp);
+        MaxTimeStamp = Math.Max(MaxTimeStamp, timeStamp);
         if (success)
         {
             SuccessCount++;
@@ -28,8 +30,6 @@ public class StreamingStats
             MaxElapsed = Math.Max(MaxElapsed, elapsed);
             SumIdleTime += idleTime;
             SumLatency += latency;
-            MinTimeStamp = Math.Min(MinTimeStamp, timeStamp);
-            MaxTimeStamp = Math.Max(MaxTimeStamp, timeStamp);
 
             double delta = elapsed - (Sum / SuccessCount);
             M2 += delta * delta;
